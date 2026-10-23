@@ -1,6 +1,7 @@
 services:
   brsy:
     build: .
+    user: "10001:10001"
     restart: unless-stopped
     init: true
     env_file: .env
