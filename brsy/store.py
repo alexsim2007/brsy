@@ -35,6 +35,8 @@ class Store:
                 old REAL, new REAL, created REAL NOT NULL, notified INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS events_owner ON events(user_id, id DESC);
+            CREATE INDEX IF NOT EXISTS events_pending ON events(user_id, id) WHERE notified=0;
+            CREATE INDEX IF NOT EXISTS users_poll ON users(last_attempt) WHERE invalid=0;
         """)
         if path != ":memory:":
             os.chmod(path, 0o600)
@@ -80,22 +82,33 @@ class Store:
         if not user:
             return
         now = time.time()
+        changed = previous is None or previous["subjects"] != subjects
+        added_events = False
         with self.db:
-            if previous:
+            if previous and changed:
                 old = {s["id"]: s for s in previous["subjects"]}
                 for subject in subjects:
                     before = old.get(subject["id"])
                     if before and before["score"] != subject["score"]:
+                        added_events = True
                         self.db.execute("""INSERT INTO events(user_id,semester,subject_id,subject,old,new,created,notified)
                                          VALUES(?,?,?,?,?,?,?,?)""",
                                         (uid, semester, subject["id"], subject["name"], before["score"], subject["score"], now,
                                          0 if current and user["notifications"] else 1))
-            self.db.execute("INSERT OR REPLACE INTO cache VALUES(?,?,?,?)", (uid, semester, json.dumps(subjects, ensure_ascii=False), now))
+            if changed:
+                payload = json.dumps(subjects, ensure_ascii=False, separators=(",", ":"))
+                self.db.execute("""INSERT INTO cache VALUES(?,?,?,?)
+                                   ON CONFLICT(user_id,semester) DO UPDATE SET payload=excluded.payload, updated=excluded.updated""",
+                                (uid, semester, payload, now))
+            else:
+                # A successful check still advances freshness without rewriting the snapshot.
+                self.db.execute("UPDATE cache SET updated=? WHERE user_id=? AND semester=?", (now, uid, semester))
             if current:
                 self.db.execute("UPDATE users SET semester=?,last_sync=?,last_attempt=?,error=NULL,invalid=0 WHERE id=?",
                                 (semester, now, now, uid))
             # Keep bounded history on the Pi, including delivered outbox entries.
-            self.db.execute("DELETE FROM events WHERE user_id=? AND notified=1 AND id NOT IN (SELECT id FROM events WHERE user_id=? ORDER BY id DESC LIMIT 1000)", (uid, uid))
+            if added_events:
+                self.db.execute("DELETE FROM events WHERE user_id=? AND notified=1 AND id NOT IN (SELECT id FROM events WHERE user_id=? ORDER BY id DESC LIMIT 1000)", (uid, uid))
 
     def failure(self, uid, message, invalid=False):
         with self.db:
@@ -106,7 +119,7 @@ class Store:
             if notifications is not None:
                 self.db.execute("UPDATE users SET notifications=? WHERE id=?", (int(notifications), uid))
                 if not notifications:
-                    self.db.execute("UPDATE events SET notified=1 WHERE user_id=?", (uid,))
+                    self.db.execute("UPDATE events SET notified=1 WHERE user_id=? AND notified=0", (uid,))
             if target is not None:
                 self.db.execute("UPDATE users SET target=? WHERE id=?", (target, uid))
 

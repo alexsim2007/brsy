@@ -259,6 +259,8 @@ def build_dispatcher(service: Service, url: str) -> Dispatcher:
 
 
 async def configure_bot(bot: Bot, url: str):
+    # This application uses polling, including when a host also provides a web domain.
+    await bot.delete_webhook(drop_pending_updates=False)
     await bot.set_my_commands([BotCommand(command=c, description=d) for c, d in [
         ("grades", "Мои баллы"), ("refresh", "Обновить"), ("semesters", "Семестры"),
         ("history", "История изменений"), ("settings", "Настройки"), ("export", "Экспорт CSV"),

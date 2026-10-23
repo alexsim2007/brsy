@@ -9,7 +9,7 @@
     const theme = mode === 'system' ? (media.matches ? 'dark' : 'light') : mode;
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101012' : '#f4f4f5');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#000000' : '#ffffff');
     window.dispatchEvent(new Event('appearancechange'));
   }
   window.brsyAppearance = {

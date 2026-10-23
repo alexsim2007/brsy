@@ -13,12 +13,15 @@ class NotLinked(GradeError):
 
 
 class Service:
+    CACHE_USERS = 256
+    DETAIL_LIMIT = 8
+
     def __init__(self, store: Store, grade: GradeClient):
         self.store, self.grade = store, grade
         self.locks = WeakValueDictionary()
         self.network = asyncio.Semaphore(4)
-        self.semesters_cache = {}
-        self.detail_cache = {}
+        self.semesters_cache = OrderedDict()
+        self.detail_cache = OrderedDict()
         self.link_attempts = OrderedDict()
         self.refresh_attempts = OrderedDict()
 
@@ -35,6 +38,17 @@ class Service:
             raise NotLinked("Сначала подключите токен БРС: /connect")
         return user
 
+    def remember(self, cache, uid, value):
+        cache[uid] = value
+        cache.move_to_end(uid)
+        if len(cache) > self.CACHE_USERS:
+            cache.popitem(last=False)
+
+    async def request(self, method, *args):
+        # Each upstream request takes a slot, including parallel detail/journal loads.
+        async with self.network:
+            return await method(*args)
+
     async def link(self, uid, token, name):
         token = parse_token(token)
         async with self.lock(uid), self.network:
@@ -50,7 +64,7 @@ class Service:
             semester = subjects[0]["semester_id"] if subjects else semesters[0]["id"] if semesters else "current"
             self.store.link(uid, token, name)
             self.store.save(uid, semester, subjects, current=True)
-            self.semesters_cache[uid] = (time.time(), semesters)
+            self.remember(self.semesters_cache, uid, (time.time(), semesters))
             self.detail_cache.pop(uid, None)
             self.refresh_attempts.pop(uid, None)
 
@@ -64,10 +78,20 @@ class Service:
         self.require(uid)
         cached = self.semesters_cache.get(uid)
         if cached and time.time() - cached[0] < 3600:
+            self.semesters_cache.move_to_end(uid)
             return cached[1]
-        async with self.network:
-            result = await self.grade.semesters(self.store.token(uid))
-        self.semesters_cache[uid] = (time.time(), result)
+        async with self.lock(uid):
+            self.require(uid)
+            return await self._semesters(uid)
+
+    async def _semesters(self, uid):
+        """Load while holding the user's lock; coalesce concurrent cache misses."""
+        cached = self.semesters_cache.get(uid)
+        if cached and time.time() - cached[0] < 3600:
+            self.semesters_cache.move_to_end(uid)
+            return cached[1]
+        result = await self.request(self.grade.semesters, self.store.token(uid))
+        self.remember(self.semesters_cache, uid, (time.time(), result))
         return result
 
     async def sync(self, uid, semester=None, *, force=False):
@@ -94,7 +118,7 @@ class Service:
                 if current and subjects:
                     key = subjects[0]["semester_id"] or key
                 elif current and semester is None:
-                    available = await self.semesters(uid)
+                    available = await self._semesters(uid)
                     if available:
                         key = available[0]["id"]
                 self.store.save(uid, key, subjects, current=current)
@@ -131,21 +155,36 @@ class Service:
     async def detail(self, uid, sid, semester=None):
         async with self.lock(uid):
             user = self.require(uid)
-            cached = self.store.cached(uid, semester or user["semester"])
+            semester = semester or user["semester"]
+            cached = self.store.cached(uid, semester)
             if not cached or sid not in {s["id"] for s in cached["subjects"]}:
                 raise GradeError("Предмет не найден в выбранном семестре.")
-            entry = self.detail_cache.get(uid, {}).get(sid)
+            key = (semester, sid)
+            entries = self.detail_cache.get(uid)
+            entry = entries.get(key) if entries else None
             if entry and time.time() - entry[0] < 60:
+                entries.move_to_end(key)
+                self.detail_cache.move_to_end(uid)
                 return entry[1]
-            async with self.network:
-                token = self.store.token(uid)
-                result = await self.grade.detail(token, sid)
-                try:
-                    result["journal"] = await self.grade.journal(token, sid)
-                    result["journal_error"] = None
-                except GradeError as exc:
-                    result["journal"] = None
-                    result["journal_error"] = str(exc)
-            # At most one detail entry per user keeps memory use modest on a Pi.
-            self.detail_cache[uid] = {sid: (time.time(), result)}
+            token = self.store.token(uid)
+            result, journal = await asyncio.gather(
+                self.request(self.grade.detail, token, sid),
+                self.request(self.grade.journal, token, sid),
+                return_exceptions=True,
+            )
+            if isinstance(result, BaseException):
+                raise result
+            if isinstance(journal, GradeError):
+                result["journal"], result["journal_error"] = None, str(journal)
+            elif isinstance(journal, BaseException):
+                raise journal
+            else:
+                result["journal"], result["journal_error"] = journal, None
+            # Bound both accounts and subject cards, rather than evicting on every click.
+            entries = OrderedDict((k, v) for k, v in (entries or {}).items() if time.time() - v[0] < 60)
+            entries[key] = (time.time(), result)
+            entries.move_to_end(key)
+            while len(entries) > self.DETAIL_LIMIT:
+                entries.popitem(last=False)
+            self.remember(self.detail_cache, uid, entries)
             return result

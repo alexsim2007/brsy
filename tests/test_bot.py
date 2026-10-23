@@ -5,11 +5,11 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.base import BaseSession
 from aiogram.enums import ParseMode
-from aiogram.methods import AnswerCallbackQuery, DeleteMessage, EditMessageReplyMarkup, SendMessage
+from aiogram.methods import AnswerCallbackQuery, DeleteMessage, DeleteWebhook, EditMessageReplyMarkup, SendMessage, SetChatMenuButton, SetMyCommands
 from aiogram.types import CallbackQuery, Chat, Message, MessageEntity, Update, User
 from cryptography.fernet import Fernet
 
-from brsy.bot import build_dispatcher
+from brsy.bot import build_dispatcher, configure_bot
 from brsy.service import Service
 from brsy.store import Store
 from test_security import BOT_TOKEN
@@ -21,11 +21,15 @@ class TelegramSession(BaseSession):
         super().__init__()
         self.sent = []
         self.deleted = []
+        self.methods = []
 
     async def close(self):
         pass
 
     async def make_request(self, bot, method, timeout=None):
+        self.methods.append(method)
+        if isinstance(method, (DeleteWebhook, SetChatMenuButton, SetMyCommands)):
+            return True
         if isinstance(method, SendMessage):
             message = Message(message_id=100+len(self.sent), date=datetime.now(timezone.utc),
                               chat=Chat(id=int(method.chat_id), type='private'),
@@ -44,6 +48,16 @@ class TelegramSession(BaseSession):
 
     async def stream_content(self, *args, **kwargs):
         yield b''
+
+
+async def test_migration_to_polling_preserves_pending_updates_and_sets_hosted_app_url():
+    session = TelegramSession()
+    async with Bot(BOT_TOKEN, session=session) as bot:
+        await configure_bot(bot, 'https://example.bothost.tech')
+    assert isinstance(session.methods[0], DeleteWebhook)
+    assert session.methods[0].drop_pending_updates is False
+    menu = next(method for method in session.methods if isinstance(method, SetChatMenuButton))
+    assert menu.menu_button.web_app.url == 'https://example.bothost.tech'
 
 
 async def test_telegram_conversation_start_token_grades_settings_delete(tmp_path):

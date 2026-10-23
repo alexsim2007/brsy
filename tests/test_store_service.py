@@ -200,3 +200,127 @@ async def test_empty_new_semester_does_not_overwrite_archived_grades(store):
     assert result['semester']=='11'
     assert store.cached(1,'10')['subjects'][0]['score']==70
     assert store.cached(1,'11')['subjects']==[]
+
+
+def test_unchanged_sync_advances_freshness_and_metadata_changes_are_saved(store, monkeypatch):
+    store.link(1, 's'*40, 'Тест')
+    items = [subject()]
+    store.save(1, '10', items, current=True)
+    store.failure(1, 'Сбой БРС')
+    checked = time.time() + 100
+    monkeypatch.setattr('brsy.store.time.time', lambda: checked)
+    store.save(1, '10', items, current=True)
+    assert store.cached(1, '10')['updated'] == checked
+    assert store.user(1)['last_sync'] == checked
+    assert store.user(1)['error'] is None
+    assert store.history(1) == []
+    items[0].update(name='Новое название', available=90)
+    store.save(1, '10', items, current=True)
+    assert store.cached(1, '10')['subjects'] == items
+    assert store.history(1) == []
+
+
+async def test_detail_loads_in_parallel_and_reuses_multiple_subjects(store):
+    journal_started = asyncio.Event()
+
+    class ParallelGrade(FakeGrade):
+        detail_calls = 0
+        journal_calls = 0
+
+        async def detail(self, token, sid):
+            self.detail_calls += 1
+            await journal_started.wait()
+            return await super().detail(token, sid)
+
+        async def journal(self, token, sid):
+            self.journal_calls += 1
+            journal_started.set()
+            return await super().journal(token, sid)
+
+    grade = ParallelGrade()
+    grade.items = [subject(sid='1'), subject(sid='2')]
+    service = Service(store, grade)
+    await service.link(1, 's'*40, 'Тест')
+    first = await asyncio.wait_for(service.detail(1, '1'), timeout=1)
+    assert first['journal'] == {'lessons': [], 'gym': None}
+    await service.detail(1, '2')
+    assert await service.detail(1, '1') == first
+    assert grade.detail_calls == grade.journal_calls == 2
+    # Expiry and a successful refresh both force another upstream read.
+    key = ('10', '1')
+    service.detail_cache[1][key] = (time.time()-61, first)
+    await service.detail(1, '1')
+    assert grade.detail_calls == 3
+    age_cache(store)
+    await service.sync(1, force=True)
+    await service.detail(1, '1')
+    assert grade.detail_calls == 4
+
+
+async def test_detail_limits_requests_across_users_and_preserves_partial_results(store):
+    class BusyGrade(FakeGrade):
+        active = 0
+        peak = 0
+
+        async def detail(self, token, sid):
+            self.active += 1
+            self.peak = max(self.peak, self.active)
+            try:
+                await asyncio.sleep(0.001)
+                return await super().detail(token, sid)
+            finally:
+                self.active -= 1
+
+        async def journal(self, token, sid):
+            await self.detail(token, sid)
+            raise GradeError('Журнал недоступен')
+
+    grade = BusyGrade()
+    service = Service(store, grade)
+    for uid in range(3):
+        store.link(uid, 's'*40, 'Тест')
+        store.save(uid, '10', [subject()], current=True)
+    results = await asyncio.gather(*(service.detail(uid, '1') for uid in range(3)))
+    assert grade.peak == 4
+    assert grade.active == 0
+    assert all(result['modules'] == [] and result['journal'] is None
+               and result['journal_error'] == 'Журнал недоступен' for result in results)
+
+
+async def test_detail_cache_is_bounded_and_cannot_survive_relink(store):
+    grade = FakeGrade()
+    grade.items = [subject(sid=str(index)) for index in range(10)]
+    service = Service(store, grade)
+    await service.link(1, 's'*40, 'Тест')
+    for item in grade.items:
+        await service.detail(1, item['id'])
+    assert len(service.detail_cache[1]) == service.DETAIL_LIMIT
+    assert ('10', '0') not in service.detail_cache[1]
+    # A different student's account cannot inherit cached cards.
+    service.link_attempts.clear()
+    await service.link(1, 'n'*40, 'Другое имя')
+    assert 1 not in service.detail_cache
+    service.CACHE_USERS = 2
+    for uid in (2, 3):
+        await service.link(uid, 's'*40, 'Тест')
+        await service.detail(uid, '0')
+    assert len(service.semesters_cache) == 2
+    assert len(service.detail_cache) <= 2
+
+
+async def test_concurrent_semester_cache_misses_only_fetch_once(store):
+    class CountingGrade(FakeGrade):
+        semester_calls = 0
+
+        async def semesters(self, token):
+            self.semester_calls += 1
+            await asyncio.sleep(0)
+            return await super().semesters(token)
+
+    grade = CountingGrade()
+    service = Service(store, grade)
+    await service.link(1, 's'*40, 'Тест')
+    service.semesters_cache.clear()
+    results = await asyncio.gather(*(service.semesters(1) for _ in range(3)))
+    assert grade.semester_calls == 2  # one at linking, one shared cache miss
+    assert results[0] == results[1] == results[2]

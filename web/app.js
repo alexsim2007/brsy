@@ -1,62 +1,272 @@
 'use strict';
-const paths={sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',moon:'<path d="M21 12.8A9 9 0 0 1 11.2 3 9 9 0 1 0 21 12.8Z"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',book:'<path d="M12 5C8 2 4 3 3 4v15c4-2 7-1 9 1m0-15c4-3 8-2 9-1v15c-4-2-7-1-9 1V5"/>',activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',settings:'<path d="m9 3-.6 3-2.5 1.5L3 7l-1 3 2 2v3l-1.5 2 2 2.5 3-1 2.5 1 1 2.5h3l1-2.5 2.5-1 2.5 1 2-2.5-1.5-2v-3l2-2-1-3-3 .5L16 6l-.6-3z"/><circle cx="12" cy="12" r="3"/>',bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 3v.1"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M5.5 7a7 7 0 0 1 12-1L20 12M4 12l2.5 6a7 7 0 0 0 12-1"/>',arrow:'<path d="M5 12h14m-5-5 5 5-5 5"/>',up:'<path d="m6 15 6-6 6 6M12 9v11"/>',down:'<path d="m6 9 6 6 6-6M12 4v11"/>',check:'<path d="m5 12 4 4L19 6"/>',target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".5"/>',search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',code:'<path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-14-2 16"/>',math:'<path d="M5 5h14M5 19h14M8 5l8 14M8 19 16 5"/>',language:'<path d="M4 5h12m-6-3v3m4 0c-1 7-4 10-9 12m0-9c2 4 4 7 8 9m1 4 4-12 4 12m-7-4h6"/>',history:'<path d="M3 4v6h6M3 10a9 9 0 1 1 1 8m8-12v6l3 2"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',shield:'<path d="m12 2 8 4v6c0 6-8 10-8 10S4 18 4 12V6z"/><path d="m8 12 3 3 5-6"/>'};
-function icon(name){return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]||paths.book}</svg>`;}
-function hydrateIcons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.icon);});}
-hydrateIcons();
-const $=s=>document.querySelector(s);
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=v=>v===null||v===undefined?'—':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(v);
-const kind=v=>({exam:'Экзамен',credit:'Зачёт',grading_credit:'Дифф. зачёт'}[v]||v||'Предмет');
-const date=v=>{if(!v)return '';const d=typeof v==='number'?new Date(v*1000):new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});};
-const time=v=>new Date(v*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-const tg=window.Telegram?.WebApp;
-if(tg?.initData){tg.ready();tg.expand();}
-function syncAppearance(){const dark=document.documentElement.dataset.theme==='dark';if(tg?.initData){tg.setHeaderColor?.(dark?'#101012':'#f4f4f5');tg.setBackgroundColor?.(dark?'#101012':'#f4f4f5');tg.setBottomBarColor?.(dark?'#101012':'#f4f4f5');}const button=$('[data-action=cycle-theme]');if(button){button.innerHTML=icon(dark?'sun':'moon');button.setAttribute('aria-label',dark?'Включить светлую тему':'Включить тёмную тему');}}
-window.addEventListener('appearancechange',syncAppearance);syncAppearance();
-let state={data:null,view:'overview',filter:'all',query:'',sort:'default',detail:null,detailTab:'works',busy:false};
-let toastTimer,detailRequest=0;
-async function api(path,options={}){let response;try{response=await fetch('/api/'+path,{...options,headers:{'Content-Type':'application/json',...(tg?.initData?{Authorization:'tma '+tg.initData}:{}),...options.headers},cache:'no-store'});}catch{throw new Error('Нет связи с сервером. Проверь интернет и попробуй ещё раз.');}if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(typeof body.detail==='string'?body.detail:'Не удалось выполнить действие. Попробуй позже.');}return response;}
-const json=async(path,options={})=>(await api(path,options)).json();
-function toast(message){clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').hidden=false;toastTimer=setTimeout(()=>{$('#toast').hidden=true;},4500);}
-function semesterQuery(){return state.data?.semester?'?semester='+encodeURIComponent(state.data.semester):'';}
-function modal(content,kicker='БРС РЯДОМ'){$('#modal-kicker').textContent=kicker;$('#modal-content').innerHTML=content;hydrateIcons($('#modal'));if(!$('#modal').open)$('#modal').showModal();}
-function heading(title,subtitle=''){const d=state.data;return `<div class="page-heading"><div><p class="greeting">${state.view==='overview'?`С возвращением, ${esc(d.name||'студент')}`:'Твой личный кабинет'}</p><h1>${title}</h1>${subtitle?`<p class="heading-sub">${subtitle}</p>`:''}</div>${d.linked?`<div class="heading-actions"><label class="select-wrap"><span class="sr-only">Семестр</span><select id="semester-select">${d.semesters.map(s=>`<option value="${esc(s.id)}" ${s.id===d.semester?'selected':''}>${esc(s.title)}</option>`).join('')}</select></label><button class="refresh-button" data-action="refresh" ${state.busy?'disabled':''} aria-label="Обновить баллы">${icon('refresh')}<span>${state.busy?'Обновляем':'Обновить'}</span></button></div>`:''}</div>`;}
-function ring(value){const score=value===null?'—':fmt(value);const normalized=Math.min(100,Math.max(0,value||0));return `<div class="hero-circle"><div class="orb-halo" aria-hidden="true"></div><svg viewBox="0 0 240 240" aria-hidden="true"><defs><linearGradient id="score-metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ffffff"/><stop offset="45%" stop-color="#dedee2"/><stop offset="100%" stop-color="#727278"/></linearGradient></defs><circle class="orb-outline" cx="120" cy="120" r="113"/><circle class="ring-track" cx="120" cy="120" r="100"/><circle class="ring-value" cx="120" cy="120" r="100" stroke-dasharray="${normalized*6.283} 628.3"/></svg><div class="ring-label"><span class="ring-eyebrow">СРЕДНИЙ БАЛЛ</span><strong>${score}</strong><span class="ring-denominator">из 100 возможных</span></div></div>`;}
-function hero(){const d=state.data;return `<div class="hero-card"><div class="hero-copy"><span class="eyebrow"><span class="hero-status-dot"></span>БАЛЛЫ ЗА СЕМЕСТР</span><h2>Баллы<br><em>по предметам.</em></h2><p>Средний балл по предметам<br>выбранного семестра.</p><div class="hero-caption">${icon(d.demo?'grid':'check')}<span>${d.demo?'Демонстрационный профиль':'Данные из БРС ЮФУ'}</span></div></div>${ring(d.stats.average)}<div class="hero-footer"><span>${d.subjects.filter(s=>s.score!==null).length} предметов с баллами</span><span>${d.demo?'Пример данных':`Проверено в ${time(d.updated)}`} ${icon('clock')}</span></div></div><div class="metrics"><div class="metric"><div class="metric-label">Предметы${icon('book')}</div><div class="metric-value">${d.stats.count}<small>в семестре</small></div></div><div class="metric"><div class="metric-label">Не ниже порога${icon('target')}</div><div class="metric-value">${d.stats.at_target}<small>из ${d.stats.count}</small></div></div><div class="metric"><div class="metric-label">Ниже порога${icon('activity')}</div><div class="metric-value">${d.subjects.filter(s=>s.score!==null&&s.score<d.settings.target).length}<small>предм.</small></div></div></div>`;}
-function toolbar(full=false){return `<div class="subject-toolbar"><div class="filter-tabs" aria-label="Фильтр предметов"><button class="${state.filter==='all'?'active':''}" data-filter="all">Все предметы</button><button class="${state.filter==='below'?'active':''}" data-filter="below">Ниже порога</button></div><div class="sort-and-search">${full?`<label><span class="sr-only">Сортировка предметов</span><select class="sort-select" id="sort-select"><option value="default" ${state.sort==='default'?'selected':''}>По умолчанию</option><option value="score" ${state.sort==='score'?'selected':''}>По баллам ↑</option><option value="name" ${state.sort==='name'?'selected':''}>По алфавиту</option></select></label>`:''}<label class="search-box">${icon('search')}<input id="subject-search" type="search" placeholder="Найти предмет" aria-label="Поиск предмета" value="${esc(state.query)}"></label></div></div>`;}
-function subjectCard(s,index){const target=state.data.settings.target,achieved=s.score!==null&&s.score>=target;return `<button class="subject-card c${index%6}" data-subject="${esc(s.id)}" aria-label="${esc(s.name)}, ${fmt(s.score)} баллов, открыть подробности"><div class="subject-top"><span class="subject-symbol">${icon(['code','math','code','math','language','history'][index%6])}</span><span class="subject-type">${esc(kind(s.type))}</span></div><h3>${esc(s.name)}</h3><p class="teacher">${esc(s.teacher||'Преподаватель не указан')}</p><div class="score-row"><div class="score-number">${fmt(s.score)}<small>/ 100</small></div><span class="target-status ${achieved?'':'under'}">${achieved?icon('check')+'Не ниже порога':s.score===null?'Пока без баллов':`До порога ${fmt(Math.max(0,target-s.score))}`}</span></div><progress class="subject-progress" value="${Math.max(0,Math.min(100,s.score||0))}" max="100" aria-label="Баллы по предмету"></progress><div class="subject-bottom"><span>Доступно сейчас: ${fmt(s.available)} / 100</span><span>Подробнее ↗</span></div></button>`;}
-function subjectsHTML(){let subjects=state.data.subjects.filter(s=>(state.filter!=='below'||s.score!==null&&s.score<state.data.settings.target)&&s.name.toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru')));if(state.sort==='name')subjects.sort((a,b)=>a.name.localeCompare(b.name,'ru'));if(state.sort==='score')subjects.sort((a,b)=>(a.score??-1)-(b.score??-1));if(!subjects.length)return `<div class="empty-state"><h3>${state.data.subjects.length?'Ничего не нашлось':'Здесь появятся твои предметы'}</h3><p>${state.data.subjects.length?'Попробуй другое название или убери фильтр.':'Когда предметы появятся в БРС, они будут и здесь.'}</p>${state.data.subjects.length?'<button data-action="reset-search">Сбросить фильтры</button>':''}</div>`;return subjects.map(s=>subjectCard(s,state.data.subjects.indexOf(s))).join('');}
-function eventHTML(e){const diff=e.new!==null&&e.old!==null?e.new-e.old:null;const down=diff!==null&&diff<0;return `<div class="event ${down?'down':''}"><span class="event-icon">${icon(down?'down':'up')}</span><div class="event-body"><h3>${esc(e.subject)}</h3><div class="event-change"><del>${fmt(e.old)}</del> → <strong>${fmt(e.new)}</strong>${diff!==null?`<span class="delta">${diff>=0?'+':''}${fmt(diff)}</span>`:''}</div><time datetime="${new Date(e.created*1000).toISOString()}">${date(e.created)}, ${time(e.created)}</time></div></div>`;}
-function events(limit){const events=state.data.history.slice(0,limit);return events.length?events.map(eventHTML).join(''):'<div class="empty-state"><h3>Изменений пока нет</h3><p>Начнём записывать изменения баллов после подключения.</p></div>';}
-function aside(){const d=state.data;return `<aside class="right-rail"><div class="goal-card"><div class="goal-head"><span class="eyebrow">СРАВНЕНИЕ БАЛЛОВ</span>${icon('target')}</div><h3>Порог баллов</h3><p>Сравнение предметов с заданным количеством баллов.</p><div class="goal-number"><strong>${d.settings.target}</strong><span>баллов</span></div><progress class="goal-scale" value="${d.stats.at_target}" max="${d.stats.count||1}" aria-label="Предметов не ниже порога"></progress><div class="goal-foot"><span>${d.stats.at_target} из ${d.stats.count} не ниже порога</span><span>↗</span></div><button class="text-button" data-view="settings">Изменить порог ${icon('arrow')}</button></div><div class="activity-card"><div class="section-heading"><h2>Последние изменения</h2><span class="live-label"><i></i>${d.demo?'ПРИМЕР':'БРС'}</span></div>${events(3)}<button class="text-button" data-view="activity">Вся история ${icon('arrow')}</button></div><div class="sync-note">${icon('refresh')}<p>Последняя проверка: <strong>${date(d.updated)}, ${time(d.updated)}</strong><br>${d.demo?'Это демонстрационные данные.':`Уведомления ${d.settings.notifications?'включены':'выключены'} · проверяем БРС автоматически.`}</p></div></aside>`;}
-function settingsHTML(){const d=state.data;return `${heading('Настройки.')}<div class="settings-layout"><div><section class="settings-panel"><h2>Параметры приложения</h2><p>Оформление, уведомления и сравнение баллов.</p><div class="settings-row appearance-row"><div><strong>Оформление</strong><p>Сохраняется на этом устройстве.</p></div><div class="appearance-options" role="group" aria-label="Оформление">${[ ['dark','Тёмная'],['light','Светлая'],['system','Авто'] ].map(([v,label])=>`<button data-theme="${v}" aria-pressed="${window.brsyAppearance.get()===v}">${label}</button>`).join('')}</div></div><div class="settings-row"><div><strong>Уведомления в Telegram</strong><p>Уведомления об изменении итогового балла предмета.</p></div><button class="toggle" role="switch" aria-label="Уведомления в Telegram" aria-checked="${d.settings.notifications}" data-action="toggle-notifications"></button></div><div class="settings-row"><div><strong>Порог сравнения баллов</strong><p>Для фильтра и статистики. Не определяет зачёт или допуск.</p></div><form class="target-form" id="target-form"><label><span class="sr-only">Порог от 1 до 100</span><input name="target" type="number" min="1" max="100" step="1" required value="${d.settings.target}"></label><button class="primary-button" type="submit">Сохранить</button></form></div></section><section class="settings-panel"><h2>Данные аккаунта</h2><p>Токен БРС, экспорт и удаление данных.</p><div class="settings-row"><div><strong>Экспорт баллов</strong><p>CSV с предметами выбранного семестра.</p></div><button class="secondary-button" data-action="export">${icon('download')} Скачать</button></div><div class="settings-row"><div><strong>Токен БРС</strong><p>Подключить новый токен или другой аккаунт БРС. При замене история сбросится.</p></div><button class="secondary-button" data-action="reconnect">Заменить</button></div><div class="settings-row"><div><strong>Удалить мои данные</strong><p>Удалим токен, баллы, настройки и историю из рабочей базы.</p></div><button class="danger-button" data-action="delete-account">Удалить</button></div></section></div><aside class="settings-aside"><h3>Источник данных</h3><p>Официальные баллы и правила оценивания — на <a href="https://grade.sfedu.ru" target="_blank" rel="noreferrer">grade.sfedu.ru ↗</a>.</p><h3>Как считаем средний балл</h3><p>Среднее итоговых баллов предметов, по которым уже есть оценка в БРС. Предметы без баллов исключены. Это не средняя оценка диплома.</p><h3>Безопасность</h3><p>Токен хранится зашифрованным на сервере владельца бота. В приложение он не возвращается. Вход подтверждается подписью Telegram.</p>${d.demo?'<p>В деморежиме порог и уведомления меняются только до перезагрузки страницы.</p>':''}</aside></div>`;}
-function connectHTML(reconnect=false){return `<div class="gate"><span class="eyebrow">${reconnect?'ОБНОВЛЕНИЕ ДОСТУПА':'ДОСТУП К БРС'}</span><h1 id="modal-title">${reconnect?'Замена токена':'Подключение к БРС'}</h1><p>Для доступа к баллам нужен студенческий токен БРС. Пароль от университетской почты не требуется.</p><ol class="steps"><li>Войди в <a href="https://grade.sfedu.ru" target="_blank" rel="noreferrer">БРС ЮФУ ↗</a> как студент.</li><li>В этом же браузере открой <a href="https://grade.sfedu.ru/student/authtokenget" target="_blank" rel="noreferrer">страницу токена ↗</a>.</li><li>Скопируй токен из 40 символов и вставь ниже.</li></ol><form class="token-form" id="token-form"><label for="token-input">Токен БРС</label><input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="Вставь свой токен" maxlength="256" required><div class="form-error" id="token-error" role="alert" hidden></div><button class="primary-button" type="submit">Подключить БРС ${icon('arrow')}</button></form><p class="privacy-small">${reconnect?'При замене аккаунта прежние баллы и история будут удалены. ':''}Токен хранится зашифрованным. Удалить доступ можно в настройках.</p></div>`;}
-function render(){const d=state.data;if(!d)return;$('#profile-name').textContent=d.name||'Студент';$('#avatar').textContent=$('#small-avatar').textContent=(d.name||'Б').slice(0,1);$('#profile-group').textContent=d.subjects?.[0]?.group||'БРС ЮФУ';$('#subject-count').textContent=d.subjects?.length??'—';$('#demo-banner').hidden=!d.demo;$('#connection-label').textContent=d.demo?'Демо-пространство':d.error?'Сохранённые данные':'БРС подключена';document.body.classList.toggle('no-connection',!!d.error);$('#error-banner').hidden=!d.error;$('#error-banner').textContent=d.error||'';const labels={overview:'Обзор',subjects:'Предметы',activity:'Изменения',settings:'Настройки'};$('#view-label').textContent=labels[state.view];document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));if(!d.linked){$('#content').innerHTML=connectHTML();$('#connection-label').textContent='Подключение БРС';return;}let content='';if(state.view==='overview')content=`${heading('Семестр.')}<div class="overview-layout"><div>${hero()}<section><div class="section-heading"><h2>Мои предметы <span>${d.subjects.length}</span></h2><button class="text-button" data-action="export">${icon('download')} Экспорт</button></div>${toolbar()}<div class="subject-grid" id="subject-grid">${subjectsHTML()}</div></section></div>${aside()}</div>`;if(state.view==='subjects')content=`${heading('Предметы.','Учебные карты, баллы и посещаемость.')}<section class="all-subjects">${toolbar(true)}<div class="subject-grid" id="subject-grid">${subjectsHTML()}</div></section>`;if(state.view==='activity')content=`${heading('История баллов.','Все замеченные изменения с момента подключения.')}<section class="activity-list">${events(50)}</section><p class="subtle-label">Первые загруженные баллы — точка отсчёта. Изменения отдельных работ без изменения итогового балла здесь не отображаются.</p>`;if(state.view==='settings')content=settingsHTML();$('#content').innerHTML=content;hydrateIcons($('#content'));}
-async function load(semester){const suffix=semester?'?semester='+encodeURIComponent(semester):'';try{state.data=await json('dashboard'+suffix);render();}catch(e){if(state.data){toast(e.message);return;}$('#connection-label').textContent='Нет подключения';$('#content').innerHTML=`<div class="gate"><span class="loading-mark">б↗</span><h1>Открой БРС рядом<br>через Telegram</h1><p>${esc(e.message)}</p><p>В личном чате с ботом нажми «Открыть БРС рядом» или кнопку меню «Моя БРС».</p><button class="secondary-button" data-action="retry">Попробовать снова ${icon('refresh')}</button></div>`;}}
-function switchView(view){if(!state.data?.linked)return;state.view=view;state.filter='all';state.query='';render();$('#main').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});tg?.HapticFeedback?.selectionChanged();}
-async function saveSettings(changes){await json('settings',{method:'PATCH',body:JSON.stringify(changes)});Object.assign(state.data.settings,changes);const d=state.data;d.stats.at_target=d.subjects.filter(s=>s.score!==null&&s.score>=d.settings.target).length;render();toast(d.demo?'Демо: настройка изменена до перезагрузки':'Настройки сохранены');}
-async function openSubject(sid){const request=++detailRequest;state.detailTab='works';modal('<h2 id="modal-title">Загружаем предмет…</h2><p>Смотрим учебную карту и журнал БРС.</p>','КАРТОЧКА ПРЕДМЕТА');try{const detail=await json('subjects/'+encodeURIComponent(sid)+semesterQuery());if(request!==detailRequest||!$('#modal').open)return;state.detail=detail;renderDetail();}catch(e){if(request===detailRequest&&$('#modal').open)modal(`<h2 id="modal-title">Пока не загрузилось</h2><p>${esc(e.message)}</p><div class="form-actions"><button class="secondary-button" data-subject="${esc(sid)}">Повторить</button></div>`);}}
-function renderDetail(){const d=state.detail;const lessons=d.journal?.lessons||[];const attended=lessons.filter(l=>[true,1,'1'].includes(l.Attended)).length;let body='';if(state.detailTab==='works'){body=d.modules.map(m=>`<section class="module"><h3>${esc(m.title)}</h3>${m.works.map(w=>`<div class="work-row"><span>${esc(w.title)}${w.date?`<small>${date(w.date)}</small>`:''}</span><strong>${fmt(w.score)} <span>/ ${fmt(w.max)}</span></strong></div>`).join('')}</section>`).join('');if(!d.modules.length)body='<div class="empty-state"><h3>Учебная карта пока пуста</h3><p>Работы появятся, когда их добавят в БРС.</p></div>';if(d.extra)body+=`<p>Дополнительные баллы: ${fmt(d.extra)}</p>`;}else{if(d.journal_error)body=`<p>${esc(d.journal_error)}</p>`;else if(!lessons.length)body='<div class="empty-state"><h3>Пока нет отметок</h3><p>В журнале БРС ещё нет занятий.</p></div>';else body=`<p>${attended} из ${lessons.length} отмеченных занятий посещено.</p><div class="module">${lessons.map(l=>`<div class="work-row"><span>${date(l.LessonDate)}<small>${esc(l.LessonType)}</small></span><span class="${[true,1,'1'].includes(l.Attended)?'journal-attended':'journal-missed'}">${[true,1,'1'].includes(l.Attended)?'Был(а) на занятии':'Нет отметки о посещении'}</span></div>`).join('')}</div>`;if(d.journal?.gym)body+=`<p>Физкультура: учтено ${esc(d.journal.gym.TotalAttendance??'—')} посещений; за текущий семестр — ${esc(d.journal.gym.SemesterCount??'—')}, ещё не учтено — ${esc(d.journal.gym.Uncounted??'—')}.</p>`;}modal(`<h2 id="modal-title">${esc(d.name)}</h2><div class="detail-meta"><span>${esc(kind(d.type))}</span><span>·</span><span>${esc(d.teacher||'Преподаватель не указан')}</span></div><div class="detail-summary"><strong>${fmt(d.score)} <small>/ 100</small></strong><span>Доступно сейчас ${fmt(d.available)} / 100</span></div><div class="detail-tabs"><button class="${state.detailTab==='works'?'active':''}" data-detail-tab="works">Учебная карта</button><button class="${state.detailTab==='journal'?'active':''}" data-detail-tab="journal">Посещаемость${lessons.length?' · '+lessons.length:''}</button></div>${body}`,'КАРТОЧКА ПРЕДМЕТА');}
-function help(){modal(`<h2 id="modal-title">Как пользоваться приложением</h2><p>Независимый помощник для студентов ЮФУ. Собирает твои предметы и баллы из БРС и присылает изменения в Telegram.</p><ol class="steps"><li>Подключи токен в боте командой /connect или в приложении.</li><li>Открой любой предмет: внутри — работы, преподаватели и журнал посещаемости.</li><li>Настрой уведомления и порог сравнения баллов. История начнётся с первого подключения.</li></ol><p>Официальный источник — <a href="https://grade.sfedu.ru" target="_blank" rel="noreferrer">grade.sfedu.ru ↗</a>. Сервис не связан с администрацией ЮФУ.</p>${state.data?.demo?'<p class="subtle-label">Сейчас открыт деморежим с вымышленными данными. Реальные токены здесь не принимаются.</p>':''}`,'СПРАВКА');}
-const actions={
-  'cycle-theme':()=>{window.brsyAppearance.set(document.documentElement.dataset.theme==='dark'?'light':'dark');if(state.view==='settings')render();},
-  'close-modal':()=>{$('#modal').close();detailRequest++;},
-  help,
-  privacy:()=>modal('<h2 id="modal-title">Данные и приватность</h2><p>Храним Telegram ID и имя, зашифрованный токен БРС, последние баллы, историю изменений и настройки. Данные находятся в SQLite на сервере владельца бота. Пароль от почты ЮФУ не запрашиваем.</p><p>Токен используется сервером только для чтения данных grade.sfedu.ru и не возвращается в Mini App. Авторизация в приложении проверяется подписью Telegram.</p><p>В настройках или командой /logout можно удалить данные из рабочей базы. Резервные копии и доступ к серверу контролирует владелец бота.</p><p>Сохранённые баллы доступны при сбое БРС; время последней проверки всегда указано на экране.</p>','О ДАННЫХ И ПРИВАТНОСТИ'),
-  retry:()=>load(),
-  'reset-search':()=>{state.query='';state.filter='all';render();},
-  refresh:async()=>{if(state.busy)return;state.busy=true;render();try{const settings={...state.data.settings};state.data=await json('refresh'+semesterQuery(),{method:'POST'});if(state.data.demo){state.data.settings=settings;state.data.stats.at_target=state.data.subjects.filter(s=>s.score>=settings.target).length;}toast(state.data.demo?'Демо: показаны примеры баллов':'Баллы проверены. Повторная проверка доступна через 15 секунд.');}finally{state.busy=false;render();}},
-  'toggle-notifications':async()=>saveSettings({notifications:!state.data.settings.notifications}),
-  export:async()=>{const response=await api('export'+semesterQuery());const url=URL.createObjectURL(await response.blob());const a=document.createElement('a');a.href=url;a.download='brsy-grades.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);toast('CSV готов. Если Telegram не скачал файл, используй /export в боте.');},
-  reconnect:()=>{if(state.data.demo){toast('Демо: реальный токен здесь не принимается');return;}modal(connectHTML(true),'ПОДКЛЮЧЕНИЕ БРС');},
-  'delete-account':()=>{if(state.data.demo){toast('Это демонстрационный профиль');return;}modal('<h2 id="modal-title">Удалить данные из бота?</h2><p>Удалим токен БРС, сохранённые баллы, настройки и всю историю. Позже можно подключиться заново.</p><div class="form-actions"><button class="secondary-button" data-action="close-modal">Оставить</button><button class="danger-button" data-action="confirm-delete">Удалить мои данные</button></div>','ТВОЙ ВЫБОР');},
-  'confirm-delete':async()=>{await json('account',{method:'DELETE'});$('#modal').close();state.view='overview';await load();toast('Токен, баллы и история удалены');}
+
+const paths = {
+  settings: '<path d="m9 3-.6 3-2.5 1.5L3 7l-1 3 2 2v3l-1.5 2 2 2.5 3-1 2.5 1 1 2.5h3l1-2.5 2.5-1 2.5 1 2-2.5-1.5-2v-3l2-2-1-3-3 .5L16 6l-.6-3z"/><circle cx="12" cy="12" r="3"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+  refresh: '<path d="M20 7v5h-5M4 17v-5h5M5.5 7a7 7 0 0 1 12-1L20 12M4 12l2.5 6a7 7 0 0 0 12-1"/>',
+  chevron: '<path d="m9 5 7 7-7 7"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+  history: '<path d="M3 4v6h6M3 10a9 9 0 1 1 1 8m8-12v6l3 2"/>',
+  key: '<circle cx="8" cy="8" r="5"/><path d="m12 12 9 9m-4-4 3-3m-6 0 3-3"/>',
+  shield: '<path d="m12 2 8 4v6c0 6-8 10-8 10S4 18 4 12V6z"/><path d="m8 12 3 3 5-6"/>',
+  trash: '<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/>'
 };
-document.addEventListener('click',async e=>{const button=e.target.closest('button');if(!button)return;try{if(button.dataset.theme){window.brsyAppearance.set(button.dataset.theme);render();}else if(button.dataset.view)switchView(button.dataset.view);else if(button.dataset.subject)await openSubject(button.dataset.subject);else if(button.dataset.filter){state.filter=button.dataset.filter;render();}else if(button.dataset.detailTab){state.detailTab=button.dataset.detailTab;renderDetail();}else if(button.dataset.action&&actions[button.dataset.action]){button.disabled=true;try{await actions[button.dataset.action]();}finally{button.disabled=false;}}}catch(error){toast(error.message);}});
-document.addEventListener('input',e=>{if(e.target.id==='subject-search'){state.query=e.target.value;$('#subject-grid').innerHTML=subjectsHTML();}});
-document.addEventListener('change',async e=>{if(e.target.id==='semester-select'){e.target.disabled=true;state.query='';state.filter='all';await load(e.target.value);if(e.target.isConnected)e.target.disabled=false;}if(e.target.id==='sort-select'){state.sort=e.target.value;$('#subject-grid').innerHTML=subjectsHTML();}});
-document.addEventListener('submit',async e=>{if(!['target-form','token-form'].includes(e.target.id))return;e.preventDefault();const form=e.target,button=form.querySelector('button[type=submit]');button.disabled=true;try{if(form.id==='target-form'){const target=Number(new FormData(form).get('target'));if(!Number.isInteger(target)||target<1||target>100)throw new Error('Порог — целое число от 1 до 100');await saveSettings({target});}else{const input=form.querySelector('input');const token=input.value.trim();input.value='';await json('connect',{method:'POST',body:JSON.stringify({token})});$('#modal').close();await load();toast('БРС подключена. Твой семестр уже здесь.');}}catch(error){if(form.id==='token-form'){$('#token-error').hidden=false;$('#token-error').textContent=error.message;}else toast(error.message);}finally{button.disabled=false;}});
-$('#modal').addEventListener('click',e=>{if(e.target===$('#modal')){const r=$('#modal').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){$('#modal').close();detailRequest++;}}});
-$('#modal').addEventListener('close',()=>{detailRequest++;});
-document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&$('#subject-search')&&!$('#modal').open){e.preventDefault();$('#subject-search').focus();}});
+const $ = selector => document.querySelector(selector);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const numberFormat = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1});
+const dateFormat = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'short'});
+const timeFormat = new Intl.DateTimeFormat('ru-RU', {hour:'2-digit', minute:'2-digit'});
+const fmt = value => value === null || value === undefined ? '—' : numberFormat.format(value);
+const kind = value => ({exam:'Экзамен', credit:'Зачёт', grading_credit:'Дифф. зачёт'}[value] || value || '');
+const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.chevron}</svg>`;
+const attended = lesson => [true, 1, '1'].includes(lesson.Attended);
+
+function date(value) {
+  if (!value) return '';
+  const parsed = new Date(typeof value === 'number' ? value * 1000 : value);
+  return Number.isNaN(parsed.getTime()) ? '' : dateFormat.format(parsed);
+}
+function time(value) {
+  return value ? timeFormat.format(new Date(value * 1000)) : '—';
+}
+function hydrateIcons(root = document) {
+  root.querySelectorAll('[data-icon]').forEach(element => { element.innerHTML = icon(element.dataset.icon); });
+}
+hydrateIcons();
+
+const tg = window.Telegram?.WebApp;
+if (tg?.initData) { tg.ready(); tg.expand(); }
+function syncAppearance() {
+  const color = document.documentElement.dataset.theme === 'dark' ? '#000000' : '#ffffff';
+  if (tg?.initData) {
+    tg.setHeaderColor?.(color);
+    tg.setBackgroundColor?.(color);
+    tg.setBottomBarColor?.(color);
+  }
+}
+window.addEventListener('appearancechange', syncAppearance);
+syncAppearance();
+
+const state = {data: null, busy: false, detail: null, dialog: null};
+let toastTimer;
+let loadRequest = 0;
+let detailRequest = 0;
+
+async function api(path, options = {}) {
+  let response;
+  try {
+    response = await fetch('/api/' + path, {
+      ...options,
+      headers: {'Content-Type':'application/json', ...(tg?.initData ? {Authorization:'tma ' + tg.initData} : {}), ...options.headers},
+      cache: 'no-store'
+    });
+  } catch {
+    throw new Error('Нет связи с сервером. Проверь интернет и повтори попытку.');
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(typeof body.detail === 'string' ? body.detail : 'Не удалось выполнить действие. Попробуй позже.');
+  }
+  return response;
+}
+const json = async (path, options = {}) => (await api(path, options)).json();
+const semesterQuery = () => state.data?.semester ? '?semester=' + encodeURIComponent(state.data.semester) : '';
+
+function toast(message) {
+  clearTimeout(toastTimer);
+  $('#toast').textContent = message;
+  $('#toast').hidden = false;
+  toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 4500);
+}
+function showDialog(content, name) {
+  state.dialog = name;
+  $('#modal-content').innerHTML = content;
+  if (!$('#modal').open) $('#modal').showModal();
+  $('#modal').scrollTop = 0;
+}
+function closeDialog() { $('#modal').close(); }
+
+function subjectRow(subject) {
+  const meta = [kind(subject.type)];
+  if (subject.score === null) meta.push('Пока без баллов');
+  else if (subject.available !== null && subject.available !== undefined) meta.push('Доступно ' + fmt(subject.available));
+  return `<button class="subject-row" data-subject="${esc(subject.id)}" aria-label="${esc(subject.name)}, ${fmt(subject.score)} баллов, подробнее">
+    <span class="subject-info"><span class="subject-name">${esc(subject.name)}</span><span class="subject-meta">${esc(meta.filter(Boolean).join(' · '))}</span></span>
+    <span class="subject-score"><strong>${fmt(subject.score)}</strong><span>/ 100</span></span>
+    <span class="row-chevron">${icon('chevron')}</span>
+  </button>`;
+}
+function render() {
+  const data = state.data;
+  if (!data) return;
+  $('#demo-banner').hidden = !data.demo;
+  $('#error-banner').hidden = !data.error;
+  $('#error-banner').textContent = data.error || '';
+  if (!data.linked) { $('#content').innerHTML = connectHTML(); return; }
+  $('#content').innerHTML = `
+    <div class="page-heading"><h1>Баллы</h1><span class="subject-count">${data.subjects.length} предм.</span></div>
+    <div class="semester-toolbar">
+      <label class="semester-picker"><span class="sr-only">Семестр</span><select id="semester-select" ${state.busy ? 'disabled' : ''}>${data.semesters.map(semester => `<option value="${esc(semester.id)}" ${semester.id === data.semester ? 'selected' : ''}>${esc(semester.title)}</option>`).join('')}</select>${icon('down')}</label>
+      <span class="updated">${data.demo ? 'Демо' : 'Проверено ' + time(data.updated)}</span>
+      <button class="icon-button refresh-button" data-action="refresh" ${state.busy ? 'disabled' : ''} aria-label="Обновить баллы">${icon('refresh')}</button>
+    </div>
+    <div class="subject-list" aria-label="Баллы по предметам">${data.subjects.length ? data.subjects.map(subjectRow).join('') : '<div class="empty-state"><h2>Предметов пока нет</h2><p>В выбранном семестре БРС ещё не вернула предметы.</p></div>'}</div>`;
+}
+async function load(semester, refresh = false) {
+  const request = ++loadRequest;
+  if (refresh) { state.busy = true; render(); }
+  const suffix = semester ? '?semester=' + encodeURIComponent(semester) : '';
+  try {
+    const result = await json((refresh ? 'refresh' : 'dashboard') + suffix, refresh ? {method:'POST'} : {});
+    if (request !== loadRequest) return;
+    if (result.demo && state.data?.demo) result.settings = state.data.settings;
+    state.data = result;
+    if (refresh) toast(result.demo ? 'Демонстрационные баллы' : 'Проверено');
+  } catch (error) {
+    if (request !== loadRequest) return;
+    if (state.data) toast(error.message);
+    else $('#content').innerHTML = `<div class="gate"><h1>Открой приложение в Telegram</h1><p>${esc(error.message)}</p><p>В чате с ботом нажми «Моя БРС» рядом с полем ввода.</p><button class="primary-button" data-action="retry">Повторить</button></div>`;
+  } finally {
+    if (request === loadRequest) { state.busy = false; render(); }
+  }
+}
+function settingsHTML() {
+  const data = state.data;
+  const linked = !!data?.linked;
+  return `<h2 id="modal-title">Настройки</h2>
+    <section class="settings-section"><h3>Оформление</h3><div class="appearance-options" role="group" aria-label="Оформление">${[['dark','Тёмная'],['light','Светлая'],['system','Авто']].map(([value, label]) => `<button data-theme="${value}" aria-pressed="${window.brsyAppearance.get() === value}">${label}</button>`).join('')}</div></section>
+    ${linked ? `<div class="settings-row"><div><strong>Уведомления</strong><p>Изменения баллов в Telegram</p></div><button class="toggle" role="switch" aria-label="Уведомления в Telegram" aria-checked="${data.settings.notifications}" data-action="toggle-notifications"></button></div>
+    <div class="settings-links">
+      <button data-action="history">${icon('history')}<span>История изменений</span>${icon('chevron')}</button>
+      <button data-action="export">${icon('download')}<span>Скачать баллы в CSV</span>${icon('chevron')}</button>
+      <button data-action="reconnect">${icon('key')}<span>Заменить токен БРС</span>${icon('chevron')}</button>
+      <button data-action="privacy">${icon('shield')}<span>Данные и приватность</span>${icon('chevron')}</button>
+      <button data-action="delete-account">${icon('trash')}<span>Удалить мои данные</span>${icon('chevron')}</button>
+    </div>` : '<p class="settings-note">Подключи токен БРС, чтобы загрузить баллы.</p>'}
+    ${data?.demo ? '<p class="settings-note">Деморежим. Уведомления меняются до перезагрузки страницы.</p>' : ''}`;
+}
+function showSettings() { detailRequest++; showDialog(settingsHTML(), 'settings'); }
+function showHistory() {
+  const events = state.data?.history || [];
+  showDialog(`<h2 id="modal-title">Изменения баллов</h2>${events.length ? `<div class="history-list">${events.map(event => `<div class="history-row"><div><strong>${esc(event.subject)}</strong><time>${date(event.created)}, ${time(event.created)}</time></div><span>${fmt(event.old)} <span class="history-arrow">→</span> ${fmt(event.new)}</span></div>`).join('')}</div>` : '<div class="empty-state"><p>Изменений пока нет. История ведётся с момента подключения.</p></div>'}`, 'history');
+}
+async function openSubject(id) {
+  const request = ++detailRequest;
+  showDialog('<h2 id="modal-title">Загрузка предмета…</h2>', 'subject');
+  try {
+    const detail = await json('subjects/' + encodeURIComponent(id) + semesterQuery());
+    if (request !== detailRequest || !$('#modal').open || state.dialog !== 'subject') return;
+    state.detail = detail;
+    showDialog(detailHTML(detail), 'subject');
+  } catch (error) {
+    if (request === detailRequest && $('#modal').open) showDialog(`<h2 id="modal-title">Не удалось загрузить</h2><p>${esc(error.message)}</p><button class="primary-button" data-subject="${esc(id)}">Повторить</button>`, 'subject');
+  }
+}
+function detailHTML(detail) {
+  const modules = detail.modules || [];
+  const lessons = detail.journal?.lessons || [];
+  const count = lessons.filter(attended).length;
+  const works = modules.map(module => `<section class="module"><h3>${esc(module.title)}</h3>${module.works.map(work => `<div class="work-row"><span>${esc(work.title)}${work.date ? `<small>${date(work.date)}</small>` : ''}</span><strong>${fmt(work.score)}<span> / ${fmt(work.max)}</span></strong></div>`).join('')}</section>`).join('');
+  let journal = detail.journal_error ? `<p>${esc(detail.journal_error)}</p>` : lessons.length ? lessons.map(lesson => `<div class="work-row"><span>${date(lesson.LessonDate)}<small>${esc(lesson.LessonType)}</small></span><span class="attendance-label">${attended(lesson) ? 'Посещено' : 'Не отмечено'}</span></div>`).join('') : '<p>В журнале пока нет занятий.</p>';
+  if (detail.journal?.gym) journal += `<p class="detail-note">Физкультура: учтено ${esc(detail.journal.gym.TotalAttendance ?? '—')} посещений; за текущий семестр — ${esc(detail.journal.gym.SemesterCount ?? '—')}.</p>`;
+  return `<h2 id="modal-title">${esc(detail.name)}</h2><p class="detail-meta">${esc([kind(detail.type), detail.teacher].filter(Boolean).join(' · '))}</p>
+    <div class="detail-score"><strong>${fmt(detail.score)}<span> / 100</span></strong><span>Доступно сейчас ${fmt(detail.available)}</span></div>
+    ${works || '<p class="detail-note">Учебная карта пока пуста.</p>'}
+    ${detail.extra ? `<p class="detail-note">Дополнительные баллы: ${fmt(detail.extra)}</p>` : ''}
+    <details class="journal"><summary><span>Посещаемость</span><span class="journal-count">${detail.journal ? count + ' / ' + lessons.length : ''}</span>${icon('down')}</summary><div class="journal-body">${journal}</div></details>`;
+}
+function connectHTML(reconnect = false) {
+  return `<div class="gate"><h${reconnect ? '2 id="modal-title"' : '1'}>${reconnect ? 'Замена токена' : 'Подключение к БРС'}</h${reconnect ? '2' : '1'}><p>Для загрузки баллов нужен студенческий токен БРС.</p>
+    <ol class="steps"><li>Войди на <a href="https://grade.sfedu.ru" target="_blank" rel="noreferrer">grade.sfedu.ru ↗</a>.</li><li>В том же браузере открой <a href="https://grade.sfedu.ru/student/authtokenget" target="_blank" rel="noreferrer">страницу токена ↗</a>.</li><li>Скопируй токен из 40 символов и вставь ниже.</li></ol>
+    <form id="token-form" class="token-form"><label for="token-input">Токен БРС</label><input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="Вставь токен" maxlength="256" required><p id="token-error" class="form-error" role="alert" hidden></p><button class="primary-button" type="submit">Подключить</button></form>
+    <p class="detail-note">${reconnect ? 'При замене аккаунта сохранённые баллы и история сбросятся. ' : ''}Пароль от почты не требуется. Токен хранится зашифрованным.</p></div>`;
+}
+const actions = {
+  settings: showSettings,
+  'close-modal': closeDialog,
+  history: showHistory,
+  retry: () => load(),
+  refresh: () => { if (!state.busy) return load(state.data?.semester, true); },
+  'toggle-notifications': async () => {
+    const notifications = !state.data.settings.notifications;
+    await json('settings', {method:'PATCH', body:JSON.stringify({notifications})});
+    state.data.settings.notifications = notifications;
+    showSettings();
+  },
+  export: async () => {
+    const response = await api('export' + semesterQuery());
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'brsy-grades.csv';
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    toast('CSV готов. Если Telegram не скачал файл, отправь /export боту.');
+  },
+  reconnect: () => {
+    if (state.data.demo) { toast('В демо нельзя подключить реальный токен'); return; }
+    showDialog(connectHTML(true), 'connect');
+  },
+  privacy: () => showDialog('<h2 id="modal-title">Данные и приватность</h2><p>На сервере владельца бота хранятся Telegram ID, имя, зашифрованный токен БРС, баллы, история и настройки.</p><p>Токен используется для чтения данных grade.sfedu.ru и не передаётся в Mini App. Пароль от почты ЮФУ не запрашивается.</p><p>Данные можно удалить в настройках или командой /logout. Резервные копии контролирует владелец сервера.</p>', 'privacy'),
+  'delete-account': () => {
+    if (state.data.demo) { toast('Это демонстрационный профиль'); return; }
+    showDialog('<h2 id="modal-title">Удалить данные?</h2><p>Токен БРС, сохранённые баллы и история будут удалены из рабочей базы.</p><div class="form-actions"><button class="secondary-button" data-action="close-modal">Отмена</button><button class="primary-button" data-action="confirm-delete">Удалить</button></div>', 'delete');
+  },
+  'confirm-delete': async () => {
+    await json('account', {method:'DELETE'});
+    closeDialog();
+    await load();
+    toast('Данные удалены');
+  }
+};
+
+document.addEventListener('click', async event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  try {
+    if (button.dataset.theme) {
+      window.brsyAppearance.set(button.dataset.theme);
+      if (state.dialog === 'settings') showSettings();
+    } else if (button.dataset.subject) await openSubject(button.dataset.subject);
+    else if (actions[button.dataset.action]) {
+      button.disabled = true;
+      try { await actions[button.dataset.action](); }
+      finally { button.disabled = false; }
+    }
+  } catch (error) { toast(error.message); }
+});
+document.addEventListener('change', async event => {
+  if (event.target.id !== 'semester-select') return;
+  event.target.disabled = true;
+  await load(event.target.value);
+});
+document.addEventListener('submit', async event => {
+  if (event.target.id !== 'token-form') return;
+  event.preventDefault();
+  const form = event.target;
+  const button = form.querySelector('button[type=submit]');
+  const input = form.querySelector('input');
+  const token = input.value.trim();
+  input.value = '';
+  button.disabled = true;
+  try {
+    await json('connect', {method:'POST', body:JSON.stringify({token})});
+    closeDialog();
+    await load();
+    toast('БРС подключена');
+  } catch (error) {
+    const label = form.querySelector('#token-error');
+    label.hidden = false;
+    label.textContent = error.message;
+  } finally { button.disabled = false; }
+});
+$('#modal').addEventListener('click', event => {
+  if (event.target !== $('#modal')) return;
+  const rect = $('#modal').getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog();
+});
+$('#modal').addEventListener('close', () => { detailRequest++; state.dialog = null; });
 load();

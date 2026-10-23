@@ -33,7 +33,8 @@ class Config:
             Fernet(key.encode())
         if url and (urlsplit(url).scheme != "https" or not urlsplit(url).netloc or urlsplit(url).query or urlsplit(url).fragment):
             raise ValueError("MINI_APP_URL должен быть HTTPS URL без query и fragment.")
-        return cls(token, key, os.getenv("DATABASE_PATH", "data/brsy.sqlite3"),
+        database_path = os.getenv("DATABASE_PATH") or str(Path(os.getenv("DATA_DIR") or "data") / "brsy.sqlite3")
+        return cls(token, key, database_path,
                    os.getenv("HOST", "127.0.0.1"), int(os.getenv("PORT", "8000")), url,
                    max(60, int(os.getenv("POLL_INTERVAL", "300"))), demo)
 

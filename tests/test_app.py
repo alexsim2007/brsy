@@ -1,3 +1,4 @@
+import re
 import time
 
 import httpx
@@ -32,6 +33,41 @@ async def test_demo_is_explicit_and_cannot_accept_real_credentials():
         assert (await client.delete('/api/account')).status_code == 403
         assert (await client.get('/api/subjects/404')).status_code == 404
         assert (await client.get('/')).status_code == 200
+
+
+async def test_hosting_health_paths_are_public_but_api_still_requires_identity(service):
+    app = create_app(Config(bot_token=BOT_TOKEN), service)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        for path in ('/health', '/healthz'):
+            response = await client.get(path)
+            assert response.status_code == 200
+            assert response.json() == {'status': 'ok', 'mode': 'live'}
+        assert (await client.get('/api/dashboard')).status_code == 401
+
+
+async def test_static_cache_versions_compression_and_private_responses():
+    app = create_app(Config(demo=True))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        page = await client.get('/')
+        assert page.headers['cache-control'] == 'no-store'
+        assets = re.findall(r'/static/[\w.-]+\?v=[0-9a-f]{16}', page.text)
+        assert len(set(assets)) == 4
+        css_url = next(url for url in assets if 'style.css' in url)
+        css = await client.get(css_url, headers={'Accept-Encoding': 'gzip'})
+        assert 'immutable' in css.headers['cache-control']
+        assert css.headers['content-encoding'] == 'gzip'
+        assert 'accept-encoding' in css.headers['vary'].lower()
+        assert int(css.headers['content-length']) < len(css.content)
+        cached = await client.get(css_url, headers={'If-None-Match': css.headers['etag']})
+        assert cached.status_code == 304 and cached.content == b''
+        assert 'immutable' in cached.headers['cache-control']
+        # Stale/unversioned addresses must revalidate rather than get stuck for a year.
+        for url in ('/static/style.css', '/static/style.css?v=old'):
+            assert (await client.get(url)).headers['cache-control'] == 'public, max-age=0, must-revalidate'
+        for url in ('/api/dashboard', '/api/export', '/static/missing.css'):
+            assert (await client.get(url)).headers['cache-control'] == 'no-store'
+        for url in set(assets):
+            assert (await client.get(url)).status_code == 200
 
 
 async def test_production_requires_signed_identity_and_never_returns_token(service):

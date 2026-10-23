@@ -1,9 +1,11 @@
+from hashlib import sha256
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import demo
 from .bot import csv_bytes
@@ -24,13 +26,27 @@ class SettingsBody(BaseModel):
 
 def create_app(config: Config, service: Service | None = None) -> FastAPI:
     app = FastAPI(title="БРС рядом", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=4)
+    # Hash once at startup. A deployment changes URLs and safely bypasses old caches.
+    assets = {f"/static/{name}": sha256((ROOT / "web" / name).read_bytes()).hexdigest()[:16]
+              for name in ("theme.js", "style.css", "app.js", "brand-icon.png")}
+    index_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    for path, version in assets.items():
+        index_html = index_html.replace(path, f"{path}?v={version}")
 
     @app.middleware("http")
     async def security_headers(request, call_next):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Cache-Control"] = "no-store"
+        version = assets.get(request.url.path)
+        if version and response.status_code in (200, 304):
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable" if request.query_params.get("v") == version
+                else "public, max-age=0, must-revalidate"
+            )
+        else:
+            response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors https://web.telegram.org https://*.telegram.org"
         return response
 
@@ -52,6 +68,7 @@ def create_app(config: Config, service: Service | None = None) -> FastAPI:
         status = 409 if isinstance(exc, NotLinked) else 401 if isinstance(exc, InvalidToken) else 502
         return JSONResponse({"detail": str(exc)}, status_code=status)
 
+    @app.get("/health")
     @app.get("/healthz")
     async def health():
         return {"status": "ok", "mode": "demo" if config.demo else "live"}
@@ -110,7 +127,7 @@ def create_app(config: Config, service: Service | None = None) -> FastAPI:
 
     @app.get("/")
     async def index():
-        return FileResponse(ROOT / "web" / "index.html")
+        return HTMLResponse(index_html)
 
     app.mount("/static", StaticFiles(directory=ROOT / "web"), name="static")
     return app
