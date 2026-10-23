@@ -1,0 +1,8 @@
+# Replace the hostname. DNS must point to your public server;
+# inbound 80/443 must reach Caddy. A tunnel is an alternative behind home NAT.
+brsy.example.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:8000
+    header Strict-Transport-Security "max-age=31536000"
+    # No access log: API requests carry Telegram authorization data in headers.
+}

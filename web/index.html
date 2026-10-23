@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101012">
+  <meta name="description" content="БРС рядом — баллы, предметы и изменения в БРС ЮФУ в одном месте.">
+  <title>БРС рядом — твой семестр</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <script src="/static/theme.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="БРС рядом, главная"><span class="brand-mark">б<span>↗</span></span><span>брс рядом<small>БАЛЛЫ И ПРЕДМЕТЫ</small></span></a>
+      <div class="workspace-label">ЛИЧНЫЙ КАБИНЕТ</div>
+      <nav class="main-nav" aria-label="Основная навигация">
+        <button class="nav-item active" data-view="overview"><span data-icon="grid"></span>Обзор<span class="nav-dot"></span></button>
+        <button class="nav-item" data-view="subjects"><span data-icon="book"></span>Предметы<span class="nav-count" id="subject-count">—</span></button>
+        <button class="nav-item" data-view="activity"><span data-icon="activity"></span>Изменения</button>
+        <button class="nav-item" data-view="settings"><span data-icon="settings"></span>Настройки</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="sidebar-help" data-action="help"><span data-icon="help"></span>Как это работает<span>↗</span></button>
+        <div class="profile"><span class="avatar" id="avatar">Б</span><div><strong id="profile-name">Твой профиль</strong><small id="profile-group">БРС ЮФУ</small></div><span class="profile-status" title="Личный кабинет"></span></div>
+      </div>
+    </aside>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>Личный кабинет</span><span class="crumb-slash">/</span><strong id="view-label">Обзор</strong></div>
+        <div class="topbar-actions"><button class="icon-button appearance-button" data-action="cycle-theme" aria-label="Сменить тему"><span data-icon="sun"></span></button><span class="connection"><i></i><span id="connection-label">БРС рядом</span></span><button class="icon-button" data-view="activity" aria-label="История изменений"><span data-icon="bell"></span></button><span class="small-avatar" id="small-avatar">Б</span></div>
+      </header>
+      <main id="main" tabindex="-1">
+        <div id="demo-banner" class="demo-banner" hidden><span><i></i>Демо</span><p>Демонстрационные данные.</p><button data-action="help">О проекте <span>↗</span></button></div>
+        <div id="error-banner" class="error-banner" role="alert" hidden></div>
+        <div id="content"><div class="loading-state"><span class="loading-mark">б↗</span><h1>Собираем твой семестр</h1><p>Загружаем сохранённые баллы…</p><div class="loading-line"></div></div></div>
+        <footer class="page-footer"><span>БРС рядом <span class="footer-dot">·</span> Независимый проект для студентов ЮФУ</span><button data-action="privacy">О данных и приватности <span>↗</span></button></footer>
+      </main>
+    </div>
+  </div>
+  <nav class="mobile-nav" aria-label="Мобильная навигация"><button class="active" data-view="overview"><span data-icon="grid"></span>Обзор</button><button data-view="subjects"><span data-icon="book"></span>Предметы</button><button data-view="activity"><span data-icon="activity"></span>Изменения</button><button data-view="settings"><span data-icon="settings"></span>Настройки</button></nav>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-top"><span class="eyebrow" id="modal-kicker">БРС РЯДОМ</span><button class="icon-button" data-action="close-modal" aria-label="Закрыть"><span data-icon="close"></span></button></div><div id="modal-content"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
