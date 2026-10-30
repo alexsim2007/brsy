@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
-  <meta name="description" content="Баллы по предметам БРС ЮФУ.">
-  <title>БРС — баллы</title>
+  <meta name="description" content="Баллы БРС и расписание ЮФУ в Telegram.">
+  <title>БРС — баллы и расписание</title>
   <link rel="icon" href="/static/brand-icon.png" type="image/png">
   <script src="/static/theme.js"></script>
   <link rel="stylesheet" href="/static/style.css">
@@ -18,12 +18,16 @@
       <a class="brand" href="/" aria-label="БРС, баллы"><img class="brand-icon" src="/static/brand-icon.png" width="34" height="34" alt=""><span>БРС<span class="brand-caption">ЮФУ</span></span></a>
       <button class="icon-button" data-action="settings" aria-label="Настройки"><span data-icon="settings"></span></button>
     </header>
+    <nav class="view-switch" aria-label="Раздел приложения">
+      <button data-view="grades" aria-pressed="true">Баллы</button>
+      <button data-view="schedule" aria-pressed="false">Расписание</button>
+    </nav>
     <main id="main" tabindex="-1">
       <p id="demo-banner" class="notice" hidden>Демо · вымышленные баллы</p>
       <div id="error-banner" class="notice error-notice" role="alert" hidden></div>
       <div id="content"><div class="loading-state"><h1>Баллы</h1><p>Загрузка…</p></div></div>
     </main>
-    <footer class="app-footer"><a href="https://grade.sfedu.ru" target="_blank" rel="noreferrer">Данные из БРС ЮФУ <span aria-hidden="true">↗</span></a></footer>
+    <footer class="app-footer"><a id="footer-source" href="https://grade.sfedu.ru" target="_blank" rel="noreferrer">Данные из БРС ЮФУ <span aria-hidden="true">↗</span></a></footer>
   </div>
   <dialog id="modal" aria-labelledby="modal-title"><button class="icon-button dialog-close" data-action="close-modal" aria-label="Закрыть"><span data-icon="close"></span></button><div id="modal-content"></div></dialog>
   <div id="toast" class="toast" role="status" hidden></div>

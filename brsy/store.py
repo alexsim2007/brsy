@@ -37,6 +37,10 @@ class Store:
             CREATE INDEX IF NOT EXISTS events_owner ON events(user_id, id DESC);
             CREATE INDEX IF NOT EXISTS events_pending ON events(user_id, id) WHERE notified=0;
             CREATE INDEX IF NOT EXISTS users_poll ON users(last_attempt) WHERE invalid=0;
+            CREATE TABLE IF NOT EXISTS schedule_preferences (
+                user_id INTEGER PRIMARY KEY, provider TEXT NOT NULL, group_id TEXT NOT NULL,
+                group_name TEXT NOT NULL, course INTEGER
+            );
         """)
         if path != ":memory:":
             os.chmod(path, 0o600)
@@ -71,6 +75,18 @@ class Store:
     def delete(self, uid):
         with self.db:
             self.db.execute("DELETE FROM users WHERE id=?", (uid,))
+            self.db.execute("DELETE FROM schedule_preferences WHERE user_id=?", (uid,))
+
+    def schedule_preference(self, uid):
+        row = self.db.execute("SELECT provider,group_id,group_name,course FROM schedule_preferences WHERE user_id=?", (uid,)).fetchone()
+        return dict(row) if row else None
+
+    def save_schedule_preference(self, uid, preference):
+        with self.db:
+            self.db.execute("""INSERT INTO schedule_preferences VALUES(?,?,?,?,?)
+                               ON CONFLICT(user_id) DO UPDATE SET provider=excluded.provider,group_id=excluded.group_id,
+                               group_name=excluded.group_name,course=excluded.course""",
+                            (uid, preference["provider"], preference["group_id"], preference["group_name"], preference["course"]))
 
     def cached(self, uid, semester):
         row = self.db.execute("SELECT payload,updated FROM cache WHERE user_id=? AND semester=?", (uid, semester)).fetchone()

@@ -14,6 +14,7 @@ from .config import Config
 from .grade import GradeClient
 from .service import Service
 from .store import Store
+from .schedule import ScheduleClient
 
 
 async def run():
@@ -36,7 +37,8 @@ async def run():
                 dp = build_dispatcher(service, config.mini_app_url)
                 tasks.append(asyncio.create_task(dp.start_polling(bot, handle_signals=False, close_bot_session=False), name="telegram"))
                 tasks.append(asyncio.create_task(notification_worker(service, bot, config.poll_interval), name="notifications"))
-            server = uvicorn.Server(uvicorn.Config(create_app(config, service), host=config.host, port=config.port, access_log=False, log_level="info"))
+            schedule = ScheduleClient(client, demo=config.demo)
+            server = uvicorn.Server(uvicorn.Config(create_app(config, service, schedule), host=config.host, port=config.port, access_log=False, log_level="info"))
             tasks.append(asyncio.create_task(server.serve(), name="web"))
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:

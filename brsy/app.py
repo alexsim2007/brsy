@@ -1,7 +1,8 @@
 from hashlib import sha256
-from typing import Annotated
+from datetime import date
+from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool
@@ -13,6 +14,7 @@ from .config import Config, ROOT
 from .grade import GradeError, InvalidToken
 from .security import AuthError, validate_init_data
 from .service import NotLinked, Service
+from .schedule import PROVIDERS, ScheduleClient, ScheduleError, calendar_bytes
 
 
 class TokenBody(BaseModel):
@@ -24,8 +26,18 @@ class SettingsBody(BaseModel):
     target: int | None = Field(default=None, ge=1, le=100, strict=True)
 
 
-def create_app(config: Config, service: Service | None = None) -> FastAPI:
+class ScheduleBody(BaseModel):
+    provider: Literal["mmcs", "ictis"]
+    group_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9-]+$")
+    group_name: str = Field(default="", max_length=120)
+    course: int | None = Field(default=None, ge=1, le=100, strict=True)
+
+
+def create_app(config: Config, service: Service | None = None, schedule: ScheduleClient | None = None) -> FastAPI:
     app = FastAPI(title="БРС рядом", docs_url=None, redoc_url=None, openapi_url=None)
+    if schedule is None and config.demo:
+        schedule = ScheduleClient(None, demo=True)
+    demo_preference = None
     app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=4)
     # Hash once at startup. A deployment changes URLs and safely bypasses old caches.
     assets = {f"/static/{name}": sha256((ROOT / "web" / name).read_bytes()).hexdigest()[:16]
@@ -61,6 +73,50 @@ def create_app(config: Config, service: Service | None = None) -> FastAPI:
             raise HTTPException(401, str(exc)) from None
 
     User = Depends(identity)
+
+    def timetable():
+        if schedule is None:
+            raise HTTPException(503, "Расписание не подключено на сервере.")
+        return schedule
+
+    def preference(uid):
+        return demo_preference if config.demo else service.store.schedule_preference(uid)
+
+    @app.exception_handler(ScheduleError)
+    async def schedule_error(request, exc):
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+
+    @app.get("/api/schedule/catalog")
+    async def schedule_catalog(provider: Literal["mmcs", "ictis"] = "mmcs", course: int | None = None,
+                               q: str = Query(default="", max_length=80), user=User):
+        return await timetable().catalogue(provider, course, q)
+
+    @app.patch("/api/schedule/preference")
+    async def schedule_preference(body: ScheduleBody, user=User):
+        nonlocal demo_preference
+        choice = await timetable().validate_group(body.provider, body.group_id, body.course, body.group_name)
+        if config.demo:
+            demo_preference = choice
+        else:
+            service.store.save_schedule_preference(user["id"], choice)
+        return {"ok": True, "preference": choice}
+
+    @app.get("/api/schedule")
+    async def get_schedule(week: date | None = None, user=User):
+        choice = preference(user["id"])
+        if choice is None:
+            return {"configured": False, "providers": PROVIDERS, "demo": config.demo}
+        return await timetable().week(choice, week)
+
+    @app.get("/api/schedule/calendar")
+    async def schedule_calendar(week: date | None = None, user=User):
+        choice = preference(user["id"])
+        if choice is None:
+            raise HTTPException(409, "Сначала выбери свою группу.")
+        data = await timetable().week(choice, week)
+        return Response(calendar_bytes(data), media_type="text/calendar; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="brsy-schedule-{data["week_start"]}.ics"'})
 
     @app.exception_handler(GradeError)
     async def grade_error(request, exc):

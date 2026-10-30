@@ -202,3 +202,76 @@ dialog .gate { padding: 0; }
 @media (prefers-reduced-motion:reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.view-switch { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--outline); border-radius: 14px; margin: 2px 0 28px; }
+.view-switch button { flex: 1; border-radius: 9px; padding: 11px 8px; font-size: 13px; font-weight: 500; color: var(--secondary); }
+.view-switch button[aria-pressed="true"] { background: var(--fg); color: var(--inverse); }
+.schedule-heading { align-items: center; }
+.schedule-heading h1 { font-size: clamp(30px, 7.6vw, 42px); }
+.schedule-group { display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; gap: 18px; padding: 0 0 22px; }
+.schedule-group > span:first-child { min-width: 0; }
+.schedule-group strong { display: block; font-size: 15px; font-weight: 550; overflow-wrap: anywhere; }
+.schedule-group small { display: block; font-size: 11px; color: var(--secondary); margin-top: 5px; }
+.schedule-group > span:last-child { display: flex; align-items: center; gap: 7px; font-size: 11px; white-space: nowrap; }
+.schedule-group svg { width: 12px; height: 12px; }
+.schedule-intro { border: 1px solid var(--outline); border-radius: 22px; padding: 28px 23px; margin-top: 26px; }
+.schedule-intro-symbol { display: block; font-size: 50px; font-weight: 300; margin: 0 0 25px; line-height: 1; }
+.schedule-intro h2 { font-size: 27px; letter-spacing: -.8px; font-weight: 550; }
+.schedule-intro > p { color: var(--secondary); font-size: 13px; line-height: 1.8; margin: 14px 0 22px; }
+.schedule-intro .detail-note { font-size: 10px; margin: 18px 0 0; }
+.next-lesson { width: 100%; display: flex; flex-direction: column; align-items: stretch; background: var(--fg); color: var(--inverse); text-align: left; padding: 21px; border-radius: 19px; margin: 0 0 24px; }
+.next-eyebrow { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; font-weight: 500; }
+.next-eyebrow > span { opacity: .7; }
+.next-lesson > strong { font-size: 23px; font-weight: 550; line-height: 1.22; letter-spacing: -.7px; margin: 20px 0 12px; overflow-wrap: anywhere; }
+.next-meta { font-size: 12px; }
+.next-parallel { display: block; font-size: 10px; margin-top: 8px; opacity: .7; }
+.next-lesson progress { appearance: none; width: 100%; height: 3px; margin-top: 20px; border: 0; border-radius: 3px; background: var(--inverse); accent-color: var(--inverse); }
+.next-lesson progress::-webkit-progress-bar { background: color-mix(in srgb, var(--inverse) 20%, transparent); border-radius: 3px; }
+.next-lesson progress::-webkit-progress-value { background: var(--inverse); border-radius: 3px; }
+.next-lesson progress::-moz-progress-bar { background: var(--inverse); }
+.week-navigation { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 17px; }
+.week-navigation > div { text-align: center; }
+.week-navigation strong { font-size: 14px; font-weight: 550; }
+.week-navigation > div > span { display: block; font-size: 10px; color: var(--secondary); margin-top: 5px; }
+.week-navigation .icon-button { border: 1px solid var(--line); border-radius: 11px; width: 35px; height: 35px; }
+.week-navigation svg { width: 14px; height: 14px; }
+.previous-week svg { transform: rotate(180deg); }
+.schedule-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; padding: 5px; border: 1px solid var(--outline); border-radius: 17px; }
+.schedule-days button { border-radius: 11px; padding: 9px 0 4px; display: flex; flex-direction: column; align-items: center; }
+.schedule-days button > span:first-child { font-size: 10px; text-transform: uppercase; color: var(--secondary); }
+.schedule-days button strong { font-size: 20px; font-weight: 500; margin-top: 5px; letter-spacing: -.6px; }
+.schedule-days button[aria-pressed="true"] { background: var(--fg); color: var(--inverse); }
+.schedule-days button[aria-pressed="true"] > span:first-child { color: inherit; }
+.day-indicator { line-height: 13px; font-size: 12px; visibility: hidden; }
+.day-indicator.has-lessons { visibility: visible; }
+.schedule-day-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--secondary); margin: 26px 0 14px; }
+.text-button { font-size: 11px; color: var(--fg); padding: 5px 0; text-decoration: underline; text-underline-offset: 3px; }
+.lesson-row { display: flex; gap: 18px; border: 1px solid var(--line); border-radius: 17px; padding: 19px 17px; margin-bottom: 10px; }
+.lesson-row.is-current { border-color: var(--outline); }
+.lesson-clock { display: flex; flex-direction: column; gap: 5px; min-width: 43px; font-variant-numeric: tabular-nums; }
+.lesson-clock time { font-size: 14px; font-weight: 550; }
+.lesson-clock span { font-size: 11px; color: var(--secondary); }
+.lesson-content { min-width: 0; }
+.lesson-label { font-size: 10px; color: var(--secondary); margin-bottom: 7px; }
+.lesson-content h2 { font-size: 16px; font-weight: 550; letter-spacing: -.35px; line-height: 1.35; overflow-wrap: anywhere; }
+.lesson-room { font-size: 12px; margin-top: 10px; font-weight: 500; }
+.lesson-teacher { font-size: 11px; color: var(--secondary); margin-top: 5px; }
+.lesson-note { font-size: 11px; border-top: 1px solid var(--line); padding-top: 9px; margin-top: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.lesson-row.is-ended .lesson-label::after { content: ' · Завершено'; }
+.schedule-bottom { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-top: 23px; font-size: 11px; }
+.calendar-export { display: flex; align-items: center; gap: 8px; padding: 10px 0; }
+.calendar-export svg { width: 16px; height: 16px; }
+.schedule-disclaimer { font-size: 10px; line-height: 1.8; color: var(--secondary); margin-top: 12px; }
+.group-form label { display: block; font-size: 11px; color: var(--secondary); margin: 17px 0 8px; }
+.group-form select, .group-form input { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--outline); border-radius: 11px; padding: 12px; font-size: 13px; min-height: 44px; }
+.group-results { margin-top: 18px; max-height: 36dvh; overflow-y: auto; overscroll-behavior: contain; }
+.group-option { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; padding: 15px 2px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
+.group-option svg { width: 13px; height: 13px; flex-shrink: 0; }
+@media (max-width:360px) {
+  .schedule-days { gap: 2px; }
+  .schedule-days button strong { font-size: 18px; }
+  .lesson-row { gap: 12px; padding: 16px 13px; }
+  .lesson-content h2 { font-size: 14px; }
+  .next-lesson { padding: 18px; }
+  .next-lesson > strong { font-size: 21px; }
+}
